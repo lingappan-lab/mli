@@ -151,15 +151,107 @@ def create_test_lines(image_width, image_height, line_spacing, orientation='hori
     return image
 
 
-def contrast_threshold(image_path):
-    """Apply contrast-enhanced thresholding"""
+def enhanced_preprocessing_and_threshold(image_path, preprocessing_dir, preprocessing_options):
+    """
+    Apply preprocessing pipeline and Huang thresholding with QC metrics
+
+    Parameters:
+    -----------
+    image_path : str
+        Path to input image
+    preprocessing_dir : str
+        Directory to save intermediate images
+    preprocessing_options : dict
+        Dictionary with keys: apply_clahe, apply_bilateral, apply_morphology
+
+    Returns:
+    --------
+    thresholded_image : np.ndarray
+        Final binary thresholded image
+    qc_metrics : dict
+        Quality control metrics
+    intermediate_images : dict
+        Dictionary of intermediate processing images
+    """
+    # Load original grayscale image
     image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        raise ValueError(f"Failed to load image: {image_path}")
+
+    # Save original
+    cv2.imwrite(os.path.join(preprocessing_dir, 'original_grayscale.tif'), image)
+
+    intermediate_images = {}
+    intermediate_images['original'] = image.copy()
+
+    # Track which preprocessing steps were applied
+    preprocessing_applied = []
+
+    # Step 1: CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    if preprocessing_options.get('apply_clahe', True):
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        image = clahe.apply(image)
+        cv2.imwrite(os.path.join(preprocessing_dir, 'after_clahe.tif'), image)
+        intermediate_images['after_clahe'] = image.copy()
+        preprocessing_applied.append('CLAHE')
+
+    # Step 2: Bilateral Filtering (Denoising)
+    if preprocessing_options.get('apply_bilateral', True):
+        image = cv2.bilateralFilter(image, d=5, sigmaColor=50, sigmaSpace=50)
+        cv2.imwrite(os.path.join(preprocessing_dir, 'after_bilateral.tif'), image)
+        intermediate_images['after_bilateral'] = image.copy()
+        preprocessing_applied.append('Bilateral')
+
+    # Step 3: Huang Thresholding
     hist, _ = np.histogram(image, bins=np.arange(257), density=False)
     huang = HuangThresholding(hist)
     threshold = huang.find_threshold()
-    _, thresholded_image = cv2.threshold(
-        image, threshold, 255, cv2.THRESH_BINARY)
-    return thresholded_image
+    _, thresholded_image = cv2.threshold(image, threshold, 255, cv2.THRESH_BINARY)
+    cv2.imwrite(os.path.join(preprocessing_dir, 'huang_threshold.tif'), thresholded_image)
+    intermediate_images['huang_threshold'] = thresholded_image.copy()
+
+    # Step 4: Morphological Cleaning
+    if preprocessing_options.get('apply_morphology', True):
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        # MORPH_OPEN: Remove small white noise in black regions
+        thresholded_image = cv2.morphologyEx(thresholded_image, cv2.MORPH_OPEN, kernel)
+        # MORPH_CLOSE: Fill small black holes in white regions
+        thresholded_image = cv2.morphologyEx(thresholded_image, cv2.MORPH_CLOSE, kernel)
+        cv2.imwrite(os.path.join(preprocessing_dir, 'after_morphology.tif'), thresholded_image)
+        intermediate_images['after_morphology'] = thresholded_image.copy()
+        preprocessing_applied.append('Morphology')
+
+    # Calculate QC metrics
+    tissue_fraction = np.sum(thresholded_image == 0) / thresholded_image.size
+    air_fraction = np.sum(thresholded_image == 255) / thresholded_image.size
+
+    # QC pass/fail criteria
+    qc_pass = True
+    warning = None
+
+    if threshold < 30 or threshold > 225:
+        qc_pass = False
+        warning = f"Threshold value {threshold} is unusual - check image quality"
+    elif tissue_fraction < 0.1:
+        qc_pass = False
+        warning = f"Very low tissue fraction ({tissue_fraction:.1%}) - mostly airspace"
+    elif tissue_fraction > 0.9:
+        qc_pass = False
+        warning = f"Very high tissue fraction ({tissue_fraction:.1%}) - check thresholding"
+
+    qc_metrics = {
+        'threshold_value': int(threshold),
+        'tissue_fraction': float(tissue_fraction),
+        'air_fraction': float(air_fraction),
+        'preprocessing_clahe': preprocessing_options.get('apply_clahe', True),
+        'preprocessing_bilateral': preprocessing_options.get('apply_bilateral', True),
+        'preprocessing_morphology': preprocessing_options.get('apply_morphology', True),
+        'preprocessing_applied': ', '.join(preprocessing_applied) if preprocessing_applied else 'None',
+        'qc_pass': qc_pass,
+        'warning': warning
+    }
+
+    return thresholded_image, qc_metrics, intermediate_images
 
 
 def overlay_images(base_image, overlay_image, measure='mli'):
@@ -199,7 +291,7 @@ def measure_chords(image, pixel_width, pixel_height):
 
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
-        if x == 0 or y == 0 or (x + w) == image_width or (y + h) == image_height:
+        if x <= 0 or y <= 0 or (x + w) >= image_width or (y + h) >= image_height:
             continue
         cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
 
@@ -250,8 +342,15 @@ def create_readme_file(output_image_dir):
 This directory contains the analysis results for a single image, organized into the following folders:
 
 ## 01_preprocessing/
-- **contrast_threshold.tif**: Binary thresholded image (black=tissue, white=airspace)
-  - Used as the foundation for all subsequent measurements
+- **original_grayscale.tif**: Original 8-bit grayscale image
+- **after_clahe.tif**: After CLAHE contrast enhancement (if enabled)
+  - Improves visibility of tissue structures with uneven illumination
+- **after_bilateral.tif**: After bilateral filtering for noise reduction (if enabled)
+  - Edge-preserving denoising to remove image artifacts
+- **huang_threshold.tif**: Binary image from Huang thresholding
+  - Initial tissue/airspace segmentation
+- **after_morphology.tif**: Final binary after morphological cleaning (if enabled)
+  - Small artifacts removed, used for all subsequent measurements
 
 ## 02_contours/
 - **all_contours_[filename].tif**: All detected contours in the image
@@ -286,20 +385,29 @@ This directory contains the analysis results for a single image, organized into 
   - Columns: x, y, Length, Orientation, Label, Measure_Type
 - **chord_lengths_mwt.csv**: Individual MWT measurements
   - Columns: x, y, Length, Orientation, Label, Measure_Type
+- **qc_metrics.csv**: Quality control metrics
+  - Columns: threshold_value, tissue_fraction, air_fraction, preprocessing_clahe,
+    preprocessing_bilateral, preprocessing_morphology, preprocessing_applied, qc_pass, warning, Label
 
 ---
 
 ## Workflow
-1. Image is thresholded to separate tissue from airspace (01_preprocessing)
-2. Contours are detected and filtered (02_contours)
-3. Grid lines are overlaid and intercepts measured (03_mli and 04_mwt)
-4. Raw measurements are saved to CSV files (05_data)
-5. Summary statistics are calculated at the slide set level (parent directory)
+1. Optional preprocessing: CLAHE, bilateral filtering (01_preprocessing)
+2. Huang thresholding to separate tissue from airspace (01_preprocessing)
+3. Optional morphological cleaning to remove artifacts (01_preprocessing)
+4. Contours are detected and filtered (02_contours)
+5. Grid lines are overlaid and intercepts measured (03_mli and 04_mwt)
+6. Raw measurements are saved to CSV files (05_data)
+7. QC metrics calculated and saved (05_data)
+8. Summary statistics are calculated at the slide set level (parent directory)
 
 ## Quality Control
-- Review thresholded image to ensure proper tissue/airspace separation
-- Check filled contours to verify which airspaces were included in measurements
-- Examine overlay images to confirm grid lines are properly aligned with tissue structures
+- **Review preprocessing steps**: Check intermediate images to ensure preprocessing improved image quality
+- **Check QC metrics**: Review qc_metrics.csv for threshold values, tissue/air fractions, and QC pass/fail status
+- **Verify thresholding**: Ensure proper tissue/airspace separation in final binary image
+- **Validate contours**: Check filled contours to verify which airspaces were included in measurements
+- **Inspect overlays**: Confirm grid lines are properly aligned with tissue structures
+- **QC thresholds**: Tissue fraction should be 10-90%, threshold value should be 30-225
 """
 
     readme_path = os.path.join(output_image_dir, 'README.md')
@@ -356,8 +464,15 @@ def measure_areas_of_spaces(thresholded_image, output_image_dir, base_name):
 
 
 def process_single_image(image_path, output_dir, input_dir_name, line_spacing,
-                         pixel_width, pixel_height, progress_callback=None):
+                         pixel_width, pixel_height, preprocessing_options=None,
+                         progress_callback=None):
     """Process a single image and return results"""
+    if preprocessing_options is None:
+        preprocessing_options = {
+            'apply_clahe': True,
+            'apply_bilateral': True,
+            'apply_morphology': True
+        }
     filename = os.path.basename(image_path)
     base_name = os.path.splitext(filename)[0]
     output_subdir = os.path.join(output_dir, input_dir_name)
@@ -392,10 +507,15 @@ def process_single_image(image_path, output_dir, input_dir_name, line_spacing,
     vertical_lines = create_test_lines(
         image_width, image_height, line_spacing, orientation='vertical')
 
-    # Apply thresholding
-    thresholded_image = contrast_threshold(image_path)
-    cv2.imwrite(os.path.join(preprocessing_dir,
-                'contrast_threshold.tif'), thresholded_image)
+    # Apply preprocessing and thresholding
+    try:
+        thresholded_image, qc_metrics, intermediate_images = enhanced_preprocessing_and_threshold(
+            image_path,
+            preprocessing_dir,
+            preprocessing_options
+        )
+    except Exception as e:
+        return None, f"Preprocessing/thresholding failed for {filename}: {str(e)}"
 
     if thresholded_image is None:
         return None, f"Thresholding failed for: {filename}"
@@ -505,6 +625,11 @@ def process_single_image(image_path, output_dir, input_dir_name, line_spacing,
         df_mwt.to_csv(os.path.join(data_dir,
                       'chord_lengths_mwt.csv'), index=False)
 
+    # Save QC metrics
+    qc_metrics['Label'] = label
+    qc_df = pd.DataFrame([qc_metrics])
+    qc_df.to_csv(os.path.join(data_dir, 'qc_metrics.csv'), index=False)
+
     # Create README file documenting the folder structure
     create_readme_file(output_image_dir)
 
@@ -518,7 +643,8 @@ def process_single_image(image_path, output_dir, input_dir_name, line_spacing,
         'overlay_mwt': overlay_horizontal_mwt,
         'overlay_mwt_vertical': overlay_vertical_mwt,
         'thresholded': thresholded_image_bgr,
-        'final_contours': final_contours_image
+        'final_contours': final_contours_image,
+        'qc_metrics': qc_metrics
     }, None
 
 
@@ -703,6 +829,29 @@ def main():
         help="Character that separates slide number from ROI in filename"
     )
 
+    # Preprocessing options (collapsed by default)
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("🔧 Advanced Preprocessing Options"):
+        st.markdown("*Optional preprocessing steps (disabled by default)*")
+
+        apply_clahe = st.checkbox(
+            "Apply CLAHE (Contrast Enhancement)",
+            value=False,
+            help="Adaptive histogram equalization for uneven illumination"
+        )
+
+        apply_bilateral = st.checkbox(
+            "Apply Bilateral Filtering (Denoising)",
+            value=False,
+            help="Edge-preserving noise reduction. May be slow on large images."
+        )
+
+        apply_morphology = st.checkbox(
+            "Apply Morphological Cleaning",
+            value=False,
+            help="Remove small artifacts after thresholding (3×3 kernel)"
+        )
+
     # Calculate and display spacing
     horizontal_spacing = line_spacing * pixel_width
     vertical_spacing = line_spacing * pixel_height
@@ -764,6 +913,13 @@ def main():
                     status_text = st.empty()
                     results_container = st.container()
 
+                    # Create preprocessing options dictionary
+                    preprocessing_options = {
+                        'apply_clahe': apply_clahe,
+                        'apply_bilateral': apply_bilateral,
+                        'apply_morphology': apply_morphology
+                    }
+
                     image_summaries = []
                     processed_count = 0
                     total_files = len(uploaded_files)
@@ -779,7 +935,8 @@ def main():
                             output_dir_name,
                             line_spacing,
                             pixel_width,
-                            pixel_height
+                            pixel_height,
+                            preprocessing_options
                         )
 
                         if result:
@@ -819,6 +976,26 @@ def main():
                                 with col7:
                                     st.image(
                                         result['overlay_mwt_vertical'], caption="MWT Vertical Grid", use_container_width=True)
+
+                                # Fourth row: QC Metrics
+                                st.markdown("**Quality Control Metrics:**")
+                                qc_col1, qc_col2, qc_col3, qc_col4 = st.columns(4)
+                                with qc_col1:
+                                    st.metric("Threshold Value", result['qc_metrics']['threshold_value'])
+                                with qc_col2:
+                                    st.metric("Tissue Fraction", f"{result['qc_metrics']['tissue_fraction']:.1%}")
+                                with qc_col3:
+                                    st.metric("Air Fraction", f"{result['qc_metrics']['air_fraction']:.1%}")
+                                with qc_col4:
+                                    qc_status = "✅ Pass" if result['qc_metrics']['qc_pass'] else "⚠️ Review"
+                                    st.metric("QC Status", qc_status)
+
+                                # Show preprocessing applied
+                                st.info(f"**Preprocessing applied:** {result['qc_metrics']['preprocessing_applied']}")
+
+                                # Show warning if QC failed
+                                if result['qc_metrics'].get('warning'):
+                                    st.warning(f"⚠️ {result['qc_metrics']['warning']}")
                         else:
                             st.error(f"❌ {error}")
 

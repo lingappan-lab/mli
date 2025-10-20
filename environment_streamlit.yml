@@ -1,4 +1,4 @@
-name: mli-streamlit
+name: mli
 channels:
   - conda-forge
 dependencies:

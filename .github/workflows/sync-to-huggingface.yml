@@ -38,7 +38,7 @@ jobs:
 
       - name: Prepare Hugging Face Space README metadata
         run: |
-          cp README.md README.github.md
+          cp README.md /tmp/README.github.md
           cat > README.md <<'EOF'
           ---
           title: Lingappan MLI Analyzer
@@ -52,7 +52,7 @@ jobs:
           license: mit
           ---
           EOF
-          cat README.github.md >> README.md
+          cat /tmp/README.github.md >> README.md
 
       - name: Sync repository to Hugging Face Space
         uses: huggingface/hub-sync@v0.1.0

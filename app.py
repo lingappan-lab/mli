@@ -559,6 +559,57 @@ button.secondary-action,
   padding-left: 18px;
 }
 
+.slide-separator-help {
+  margin-top: var(--space-3);
+}
+
+.slide-separator-help code {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-paper);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.separator-rule {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: var(--space-2) 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.separator-examples {
+  width: 100%;
+  margin: var(--space-2) 0;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.separator-examples th,
+.separator-examples td {
+  padding: 7px 8px;
+  border-top: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.separator-examples th {
+  color: var(--ink-soft);
+  font-weight: 740;
+}
+
+.separator-examples td {
+  color: var(--muted);
+}
+
+.separator-note {
+  color: var(--muted);
+}
+
 .example-preview {
   margin: var(--space-3) 0 !important;
 }
@@ -1201,16 +1252,13 @@ label span,
 }
 
 .qc-preview-item {
-  display: grid;
-  gap: var(--space-2);
-  align-items: start;
+  display: block;
   height: 100%;
   padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-inset);
   color: var(--ink);
-  text-decoration: none;
   transition: border-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out), transform 140ms var(--ease-out);
 }
 
@@ -1220,14 +1268,40 @@ label span,
   transform: translateY(-1px);
 }
 
-.qc-preview-thumb {
+.qc-preview-summary {
+  display: grid;
+  gap: var(--space-2);
+  align-items: start;
+  cursor: zoom-in;
+  list-style: none;
+}
+
+.qc-preview-summary::-webkit-details-marker {
+  display: none;
+}
+
+.qc-preview-item[open] .qc-preview-summary {
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.qc-preview-thumb,
+.qc-preview-large {
   display: block;
   width: 100%;
-  aspect-ratio: 5 / 3;
   object-fit: contain;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: white;
+  background: oklch(99% 0.004 205);
+}
+
+.qc-preview-thumb {
+  aspect-ratio: 5 / 3;
+}
+
+.qc-preview-large {
+  max-height: 70vh;
 }
 
 .qc-preview-name {
@@ -1237,6 +1311,19 @@ label span,
   font-weight: 760;
   line-height: 1.2;
   overflow-wrap: anywhere;
+}
+
+.qc-preview-action,
+.qc-preview-note {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.qc-preview-expanded {
+  display: grid;
+  gap: var(--space-2);
 }
 
 .results-stack {
@@ -1847,8 +1934,56 @@ def render_example_panel() -> str:
       <ul>
         <li>Image: <strong>{escape(ui_config.EXAMPLE_FILENAME)}</strong> ({escape(dimensions)})</li>
         <li>Calibration: {ui_config.EXAMPLE_PIXEL_WIDTH_UM:g} × {ui_config.EXAMPLE_PIXEL_HEIGHT_UM:g} µm/px</li>
-        <li>Filename parsing: separator <strong>_</strong> gives slide ID <strong>{escape(ui_config.EXAMPLE_SLIDE_ID)}</strong> and field ID <strong>{escape(ui_config.EXAMPLE_FIELD_ID)}</strong></li>
       </ul>
+    </section>
+    """
+
+
+def _display_separator(separator: str) -> str:
+    labels = {
+        "_": "underscore (_)",
+        "-": "hyphen (-)",
+        ".": "period (.)",
+        " ": "space",
+        "\t": "tab",
+    }
+    return labels.get(separator, separator)
+
+
+def _separator_code(separator: str) -> str:
+    normalized = separator or "_"
+    visible = _display_separator(normalized)
+    return f"<code>{escape(visible)}</code>"
+
+
+def render_slide_separator_examples(slide_roi_separator: str = "_") -> str:
+    separator = slide_roi_separator or "_"
+    examples = [
+        f"MouseA{separator}0001.tif",
+        f"MouseA{separator}0002.tif",
+        f"MouseA_left_lung{separator}0003.tif",
+    ]
+    rows = []
+    for filename in examples:
+        slide_id = ui_validation.infer_slide_id(filename, separator)
+        field_id = ui_validation.infer_field_id(filename, separator)
+        rows.append(
+            "<tr>"
+            f"<td><code>{escape(filename)}</code></td>"
+            f"<td><code>{escape(slide_id)}</code></td>"
+            f"<td><code>{escape(field_id)}</code></td>"
+            "</tr>"
+        )
+    return f"""
+    <section class="example-inline slide-separator-help" aria-label="Slide separator examples">
+      <h4>{icon_label("info", "Slide separator examples")}</h4>
+      <p>The separator is the character or text between the slide/specimen ID and the field/ROI ID. The app splits the filename stem at the final occurrence, so earlier separator characters can stay inside the slide ID.</p>
+      <div class="separator-rule"><span>Current separator:</span> {_separator_code(separator)}</div>
+      <table class="separator-examples" aria-label="Filename parsing examples">
+        <thead><tr><th scope="col">Filename</th><th scope="col">Slide used for grouping</th><th scope="col">Field ID</th></tr></thead>
+        <tbody>{''.join(rows)}</tbody>
+      </table>
+      <p class="separator-note">Files with the same Slide value are combined in one slide summary. For names like <code>MouseA-field03.tif</code>, enter <code>-</code>. If the separator is not found, the whole filename stem becomes the Slide value and the Field is recorded as <code>field</code>.</p>
     </section>
     """
 
@@ -2007,10 +2142,17 @@ def render_qc_previews(paths: list[Path]) -> str:
         items.append(
             f"""
             <li>
-              <a class="qc-preview-item" href="{escape(uri)}" target="_blank" rel="noopener" aria-label="Open QC preview for {escape(label)}">
-                <img class="qc-preview-thumb" src="{escape(uri)}" alt="QC preview thumbnail for {escape(label)}" loading="{loading}" decoding="async">
-                <strong class="qc-preview-name">{escape(label)}</strong>
-              </a>
+              <details class="qc-preview-item">
+                <summary class="qc-preview-summary" aria-label="Show larger QC preview for {escape(label)}">
+                  <img class="qc-preview-thumb" src="{escape(uri)}" alt="QC preview thumbnail for {escape(label)}" loading="{loading}" decoding="async">
+                  <strong class="qc-preview-name">{escape(label)}</strong>
+                  <span class="qc-preview-action">Click to expand inline</span>
+                </summary>
+                <div class="qc-preview-expanded">
+                  <img class="qc-preview-large" src="{escape(uri)}" alt="Larger QC preview for {escape(label)}" loading="lazy" decoding="async">
+                  <span class="qc-preview-note">Full-resolution QC files are included in the results ZIP under <code>{escape(label)}/qc_panel.png</code>.</span>
+                </div>
+              </details>
             </li>
             """
         )
@@ -2158,7 +2300,7 @@ def render_method_summary(
         f"{edge_label}, {min_label}",
         non_airspace_label,
         "slide summaries: field-balanced + chord-pooled",
-        f"sep '{separator}'",
+        f"filename separator: {separator!r}",
     ]
     chip_markup = "".join(f"<span>{escape(chip)}</span>" for chip in chips)
     return f"""
@@ -2691,6 +2833,16 @@ def create_demo() -> gr.Blocks:
                                 type="filepath",
                                 elem_classes=["upload-control", "folder-upload-control"],
                             )
+                        slide_roi_separator = gr.Textbox(
+                            label="Slide/field separator",
+                            value="_",
+                            max_lines=1,
+                            info=(
+                                "Enter the exact character or text before the field ID. "
+                                "The final match in the filename stem is used for grouping fields by slide."
+                            ),
+                        )
+                        slide_separator_help = gr.HTML(render_slide_separator_examples("_"), padding=False)
                         gr.HTML(
                             '<p class="control-note">Select individual pre-cropped ROI image files, upload one or more folders of ROI images, or use both. Whole-slide field selection and protocol-driven field exclusions must happen before this app; record that upstream method below.</p>',
                             padding=False,
@@ -2737,8 +2889,8 @@ def create_demo() -> gr.Blocks:
                             section_heading(
                                 "02",
                                 "ruler",
-                                "Calibration and identifiers",
-                                "Set pixel size, calibration source, and filename parsing before measurement.",
+                                "Calibration",
+                                "Set pixel size and calibration source before measurement.",
                             ),
                             padding=False,
                         )
@@ -2778,15 +2930,6 @@ def create_demo() -> gr.Blocks:
                             placeholder="Built-in default: 0.57 × 0.57 µm/px",
                             max_lines=1,
                             info="Record where the pixel size came from (microscope metadata, stage micrometer, scale bar). Leaving this blank uses the built-in default and logs a warning.",
-                        )
-                        slide_roi_separator = gr.Textbox(
-                            label="Slide separator",
-                            value="_",
-                            max_lines=1,
-                            info=(
-                                f"Example {ui_config.EXAMPLE_FILENAME}: '_' splits slide ID "
-                                f"{ui_config.EXAMPLE_SLIDE_ID} from field ID {ui_config.EXAMPLE_FIELD_ID}."
-                            ),
                         )
                         with gr.Row(elem_classes=["wizard-nav"]):
                             calibration_back = gr.Button("Back to intake", elem_classes=["secondary-action"])
@@ -3053,6 +3196,12 @@ def create_demo() -> gr.Blocks:
             fn=ui_previews.render_calibration_preview,
             inputs=[pixel_width_um, pixel_height_um],
             outputs=calibration_preview,
+        )
+        _wire_live_update(
+            (slide_roi_separator,),
+            fn=render_slide_separator_examples,
+            inputs=[slide_roi_separator],
+            outputs=slide_separator_help,
         )
 
         grid_strategy.change(

@@ -26,7 +26,21 @@ Also provide:
 
 - Pixel width and height in µm/px.
 - Calibration source.
+- The slide/field separator used in filenames.
 - Optional notes describing how fields were selected or excluded before upload.
+
+### Filename grouping
+
+The slide/field separator tells the app how to split each filename into a slide ID and a field/ROI ID. The app uses the final occurrence of the separator before the file extension.
+
+| Filename | Separator | Slide used for grouping | Field ID |
+| --- | --- | --- | --- |
+| `MouseA_0001.tif` | `_` | `MouseA` | `0001` |
+| `MouseA_0002.tif` | `_` | `MouseA` | `0002` |
+| `MouseA_left_lung_0003.tif` | `_` | `MouseA_left_lung` | `0003` |
+| `MouseA-field03.tif` | `-` | `MouseA` | `field03` |
+
+Files with the same slide ID are combined in one slide summary. If the separator is not found, the whole filename stem becomes the slide ID and the field is recorded as `field`.
 
 ## How measurement works
 

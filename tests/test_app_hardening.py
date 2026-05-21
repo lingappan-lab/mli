@@ -354,3 +354,20 @@ def test_qc_preview_data_uri_only_reads_export_root(tmp_path, monkeypatch):
     assert app._qc_preview_data_uri(inside).startswith("data:image/png;base64,")
     with pytest.raises(ValueError, match="outside export root"):
         app._qc_preview_data_uri(outside)
+
+
+def test_qc_previews_expand_inline_without_opening_data_uri_links(tmp_path, monkeypatch):
+    export_root = tmp_path / "exports"
+    export_root.mkdir()
+    preview = export_root / ui_config.EXPORT_RUN_PREFIX / "SlideA_0001" / "qc_panel.png"
+    preview.parent.mkdir(parents=True)
+    preview.write_bytes(b"preview")
+    monkeypatch.setattr(ui_config, "EXPORT_ROOT", export_root)
+
+    html = app.render_qc_previews([preview])
+
+    assert "data:image/png;base64," in html
+    assert "<details class=\"qc-preview-item\">" in html
+    assert "Click to expand inline" in html
+    assert "href=\"data:image" not in html
+    assert "target=\"_blank\"" not in html

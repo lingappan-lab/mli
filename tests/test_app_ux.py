@@ -46,3 +46,23 @@ def test_line_protocol_copy_explains_chords_plainly():
     assert "one-pixel test lines" in copy
     assert "one continuous stretch of airspace" in copy
     assert "not wall-thickness measurements" in copy
+
+
+def test_slide_separator_examples_explain_grouping_and_final_separator():
+    copy = app.render_slide_separator_examples("_")
+
+    assert "final occurrence" in copy
+    assert "MouseA_0001.tif" in copy
+    assert "MouseA_0002.tif" in copy
+    assert "MouseA_left_lung_0003.tif" in copy
+    assert "MouseA_left_lung" in copy
+    assert "Files with the same Slide value are combined" in copy
+
+
+def test_slide_separator_examples_adapt_to_hyphen_separator():
+    copy = app.render_slide_separator_examples("-")
+
+    assert "hyphen (-)" in copy
+    assert "MouseA-0001.tif" in copy
+    assert "MouseA-left_lung" not in copy
+    assert "MouseA_left_lung-0003.tif" in copy

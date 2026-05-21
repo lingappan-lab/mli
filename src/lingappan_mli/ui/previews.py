@@ -83,7 +83,7 @@ def render_calibration_preview(pixel_width_um: float, pixel_height_um: float):
     )
     draw.text(
         (12, 40),
-        f"Pixel size: {pixel_width:g} × {pixel_height:g} µm/px · Original image: {original_width} × {original_height} px",
+        f"Pixel size: {pixel_width:g} x {pixel_height:g} um/px | Original image: {original_width} x {original_height} px",
         fill=muted,
         font=label_font,
     )
@@ -91,13 +91,13 @@ def render_calibration_preview(pixel_width_um: float, pixel_height_um: float):
 
     h_arrow_y = y1 + 30
     _draw_double_arrow(draw, (x0, h_arrow_y), (x1, h_arrow_y), primary, width=3)
-    h_label = f"width: {original_width:,} px × {pixel_width:g} µm/px = {field_width_um:,.1f} µm"
+    h_label = f"width: {original_width:,} px x {pixel_width:g} um/px = {field_width_um:,.1f} um"
     h_bbox = draw.textbbox((0, 0), h_label, font=label_font)
     draw.text((x0 + (display_width - (h_bbox[2] - h_bbox[0])) / 2, h_arrow_y + 10), h_label, fill=ink, font=label_font)
 
     v_arrow_x = x0 - 34
     _draw_double_arrow(draw, (v_arrow_x, y0), (v_arrow_x, y1), primary, width=3)
-    v_label = f"height: {original_height:,} px × {pixel_height:g} µm/px = {field_height_um:,.1f} µm"
+    v_label = f"height: {original_height:,} px x {pixel_height:g} um/px = {field_height_um:,.1f} um"
     label_img = PILImage.new("RGBA", (display_height, 24), (255, 255, 255, 0))
     label_draw = ImageDraw.Draw(label_img)
     label_draw.text((0, 4), v_label, fill=ink, font=label_font)
@@ -113,7 +113,7 @@ def render_calibration_preview(pixel_width_um: float, pixel_height_um: float):
     draw.line((bar_x0, bar_y - 8, bar_x0, bar_y + 8), fill=accent, width=3)
     draw.line((bar_x1, bar_y - 8, bar_x1, bar_y + 8), fill=accent, width=3)
     draw.rectangle((bar_x0 - 8, bar_y - 35, bar_x1 + 8, bar_y - 13), fill=(255, 255, 255, 210))
-    draw.text((bar_x0, bar_y - 33), f"{scale_bar_um} µm", fill=ink, font=small_font)
+    draw.text((bar_x0, bar_y - 33), f"{scale_bar_um} um", fill=ink, font=small_font)
 
     return canvas.convert("RGB")
 

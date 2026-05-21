@@ -1,6 +1,12 @@
 # Lingappan MLI Analyzer
 
+<p align="center">
+  <img src="assets/lingappan-mli-logo.svg" alt="Lingappan MLI Analyzer logo" width="220">
+</p>
+
 Lingappan MLI Analyzer measures mean linear intercept (MLI) from pre-cropped lung histology fields.
+
+Use the hosted Gradio app here: [Lingappan MLI Analyzer on Hugging Face Spaces](https://huggingface.co/spaces/LingappanLab/LingappanMLI).
 
 The default workflow follows the chord-measurement approach described by Crowley et al.:
 

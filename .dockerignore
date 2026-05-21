@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+.env
+.git/
+.gitignore
+.DS_Store
+
+# Local data and generated analysis artifacts
+data/
+test_input/
+input_fields/
+outputs/
+results/
+lingappan_mli_results/
+lingappan_mli_exports/
+*.zip
+
+# Local build/packaging artifacts
+dist/
+build/

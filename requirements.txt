@@ -1,5 +1,1 @@
-opencv-python-headless
-numpy
-pandas
-openpyxl
-pillow
+-e .[app]

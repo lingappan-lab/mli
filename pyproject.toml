@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.29"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lingappan-mli"
+version = "0.1.0"
+description = "Semi-automated mean linear intercept analysis for cropped lung histology fields"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Lingappan Lab" }
+]
+keywords = ["histology", "lung", "mli", "morphometry", "image-analysis"]
+dependencies = [
+  "numpy>=2.4",
+  "pandas>=3.0",
+  "pillow>=12.2",
+  "openpyxl>=3.1.5",
+]
+
+[project.optional-dependencies]
+app = ["gradio>=6.14,<7", "urllib3>=2"]
+dev = ["pytest>=9.0", "ruff>=0.15"]
+
+[project.scripts]
+lingappan-mli = "lingappan_mli.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lingappan_mli"]
+
+[tool.ruff]
+line-length = 110

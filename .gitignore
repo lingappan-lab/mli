@@ -21,3 +21,6 @@ PRODUCT.md
 
 # Local/generated docs notes (existing tracked docs/ files remain tracked by Git).
 docs/**
+# Keep README-linked methods documentation in version control.
+!docs/
+!docs/methods.md
